@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from agent.config import load_settings
 from agent.loop import run_turn
-from agent.tools import NotesStore, build_tools
+from agent.tools import DocIndex, NotesStore, build_tools
 
 ROOT = Path(__file__).resolve().parent
 
@@ -15,7 +15,10 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     settings = load_settings()
     client = boto3.client("bedrock-runtime", region_name=settings.region)
-    tools = build_tools(NotesStore(ROOT / "data" / "notes.json"))
+    tools = build_tools(
+        NotesStore(ROOT / "data" / "notes.json"),
+        DocIndex(ROOT / "docs"),
+    )
     messages: list[dict] = []
 
     print(f"Bedrock agent ({settings.model_id}, {settings.region}).")

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from agent.config import Settings
 from agent.loop import run_turn, trim_history, visible_reply
-from agent.tools import NotesStore, build_tools, calculate, run_tool
+from agent.tools import DocIndex, NotesStore, build_tools, calculate, run_tool
 
 
 class FakeClient:
@@ -62,7 +62,7 @@ class LoopTests(unittest.TestCase):
         used = []
         messages = [{"role": "user", "content": [{"text": "what is 2 + 2?"}]}]
         with tempfile.TemporaryDirectory() as directory:
-            tools = build_tools(NotesStore(Path(directory) / "notes.json"))
+            tools = _tools(Path(directory))
             reply = run_turn(client, settings(), messages, tools, on_tool=used.append)
 
         self.assertEqual(reply, "4")
@@ -103,7 +103,7 @@ class LoopTests(unittest.TestCase):
         )
         messages = [{"role": "user", "content": [{"text": "hi"}]}]
         with tempfile.TemporaryDirectory() as directory:
-            tools = build_tools(NotesStore(Path(directory) / "notes.json"))
+            tools = _tools(Path(directory))
             reply = run_turn(client, settings(), messages, tools)
 
         self.assertEqual(reply, "Hi. What do you need?")
@@ -130,8 +130,7 @@ class ToolTests(unittest.TestCase):
 
     def test_notes_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = NotesStore(Path(directory) / "notes.json")
-            tools = build_tools(store)
+            tools = _tools(Path(directory))
             saved = run_tool(
                 tools,
                 {
@@ -148,6 +147,30 @@ class ToolTests(unittest.TestCase):
         self.assertIn("Saved note 1", saved["toolResult"]["content"][0]["text"])
         self.assertIn("desk lamp is on the left", found["toolResult"]["content"][0]["text"])
 
+    def test_search_docs_returns_the_matching_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text(
+                "# Guide\n\n## Guest Wi-Fi\n\nThe password is birch-lantern-19.\n\n"
+                "## Hours\n\nThe office opens at 8:15.\n",
+                encoding="utf-8",
+            )
+            tools = build_tools(NotesStore(root / "notes.json"), DocIndex(docs))
+            found = run_tool(
+                tools,
+                {
+                    "toolUseId": "d1",
+                    "name": "search_docs",
+                    "input": {"query": "guest wifi password"},
+                },
+            )
+
+        text = found["toolResult"]["content"][0]["text"]
+        self.assertIn("birch-lantern-19", text)
+        self.assertNotIn("opens at 8:15", text)
+
     def test_trim_drops_leading_tool_result(self):
         messages = [
             {"role": "assistant", "content": [{"text": "old"}]},
@@ -159,6 +182,10 @@ class ToolTests(unittest.TestCase):
         ]
         trim_history(messages, limit=10)
         self.assertEqual(messages, [{"role": "user", "content": [{"text": "keep me"}]}])
+
+
+def _tools(directory: Path):
+    return build_tools(NotesStore(directory / "notes.json"), DocIndex(directory / "docs"))
 
 
 if __name__ == "__main__":

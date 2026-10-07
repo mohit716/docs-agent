@@ -1,6 +1,6 @@
 # docs-agent
 
-A local chat agent for one person. It calls the Amazon Bedrock Converse API. Documents and a Knowledge Base are not connected yet.
+A local chat agent for one person. It calls the Amazon Bedrock Converse API. Sample office facts live in `docs/office-guide.md`. A Bedrock Knowledge Base is not connected yet.
 
 The default model is Nova Lite in US East (N. Virginia). You pay for tokens only. At personal use that stays under about $1 a month.
 
@@ -24,6 +24,7 @@ python main.py
 
 The model can call these on your machine:
 
+- `search_docs`, over the files in `docs/`
 - `get_current_time`
 - `calculate`
 - `remember` and `recall`, stored in `data/notes.json`

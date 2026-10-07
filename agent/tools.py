@@ -1,6 +1,7 @@
 import ast
 import json
 import operator
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -119,8 +120,83 @@ def _format_number(value: float) -> str:
     return str(value)
 
 
-def build_tools(notes: NotesStore) -> list[Tool]:
+class DocIndex:
+    """Keyword search over local text files. A stand-in for a Bedrock Knowledge Base."""
+
+    def __init__(self, directory: Path):
+        self.directory = directory
+
+    def search(self, query: str) -> str:
+        terms = _query_terms(query)
+        if not terms:
+            raise ValueError("search query is empty")
+        chunks = self._chunks()
+        if not chunks:
+            return "No documents are available."
+        ranked = []
+        for name, body in chunks:
+            words = _words(body)
+            hits = sum(1 for term in terms if term in words)
+            if hits:
+                ranked.append((hits, name, body))
+        if not ranked:
+            return "No matching passages."
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        parts = [f"[{name}]\n{body}" for _, name, body in ranked[:3]]
+        return "\n\n".join(parts)
+
+    def _chunks(self) -> list[tuple[str, str]]:
+        if not self.directory.is_dir():
+            return []
+        chunks: list[tuple[str, str]] = []
+        for path in sorted(self.directory.glob("*")):
+            if path.suffix.lower() not in {".md", ".txt"} or not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
+            for part in re.split(r"\n(?=#+\s)", text):
+                body = part.strip()
+                if body:
+                    chunks.append((path.name, body))
+        return chunks
+
+
+def _words(text: str) -> set[str]:
+    lowered = text.lower()
+    words = set(re.findall(r"[a-z0-9]+", lowered))
+    for match in re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)+", lowered):
+        words.add(match.replace("-", ""))
+    return words
+
+
+def _query_terms(query: str) -> list[str]:
+    skip = {"the", "and", "for", "what", "when", "where", "how", "who", "does", "with"}
     return [
+        term
+        for term in re.findall(r"[a-z0-9]+", query.lower())
+        if len(term) >= 3 and term not in skip
+    ]
+
+
+def build_tools(notes: NotesStore, docs: DocIndex) -> list[Tool]:
+    return [
+        Tool(
+            name="search_docs",
+            description=(
+                "Search the local office documents and return matching passages. "
+                "Use this before answering questions about office hours, wifi, equipment, or time off."
+            ),
+            schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Words to look up in the documents, for example guest wifi password.",
+                    }
+                },
+                "required": ["query"],
+            },
+            handler=lambda payload: docs.search(str(payload.get("query", ""))),
+        ),
         Tool(
             name="get_current_time",
             description="Return the current date and time. Use this when the user asks what time it is.",
