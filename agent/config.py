@@ -9,6 +9,7 @@ class Settings:
     max_tokens: int
     temperature: float
     history_limit: int
+    knowledge_base_id: str
 
 
 def load_settings() -> Settings:
@@ -18,4 +19,5 @@ def load_settings() -> Settings:
         max_tokens=int(os.getenv("BEDROCK_MAX_TOKENS", "1024")),
         temperature=float(os.getenv("BEDROCK_TEMPERATURE", "0.2")),
         history_limit=int(os.getenv("BEDROCK_HISTORY_MESSAGES", "24")),
+        knowledge_base_id=os.getenv("BEDROCK_KNOWLEDGE_BASE_ID", "").strip(),
     )

@@ -120,6 +120,40 @@ def _format_number(value: float) -> str:
     return str(value)
 
 
+class KnowledgeBaseSearch:
+    """Retrieve passages from a Bedrock Managed Knowledge Base."""
+
+    def __init__(self, client, knowledge_base_id: str):
+        self.client = client
+        self.knowledge_base_id = knowledge_base_id
+
+    def search(self, query: str) -> str:
+        cleaned = query.strip()
+        if not cleaned:
+            raise ValueError("search query is empty")
+        response = self.client.retrieve(
+            knowledgeBaseId=self.knowledge_base_id,
+            retrievalQuery={"text": cleaned},
+            retrievalConfiguration={
+                "managedSearchConfiguration": {"numberOfResults": 3}
+            },
+        )
+        return passages_from_retrieve(response)
+
+
+def passages_from_retrieve(response: dict[str, Any]) -> str:
+    parts = []
+    for item in response.get("retrievalResults") or []:
+        text = ((item.get("content") or {}).get("text") or "").strip()
+        if not text:
+            continue
+        uri = ((item.get("location") or {}).get("s3Location") or {}).get("uri") or "passage"
+        parts.append(f"[{uri}]\n{text}")
+    if not parts:
+        return "No matching passages."
+    return "\n\n".join(parts)
+
+
 class DocIndex:
     """Keyword search over local text files. A stand-in for a Bedrock Knowledge Base."""
 
@@ -177,12 +211,12 @@ def _query_terms(query: str) -> list[str]:
     ]
 
 
-def build_tools(notes: NotesStore, docs: DocIndex) -> list[Tool]:
+def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list[Tool]:
     return [
         Tool(
             name="search_docs",
             description=(
-                "Search the local office documents and return matching passages. "
+                "Search the office documents in the knowledge base and return matching passages. "
                 "Use this before answering questions about office hours, wifi, equipment, or time off."
             ),
             schema={

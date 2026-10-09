@@ -4,7 +4,15 @@ from pathlib import Path
 
 from agent.config import Settings
 from agent.loop import run_turn, trim_history, visible_reply
-from agent.tools import DocIndex, NotesStore, build_tools, calculate, run_tool
+from agent.tools import (
+    DocIndex,
+    KnowledgeBaseSearch,
+    NotesStore,
+    build_tools,
+    calculate,
+    passages_from_retrieve,
+    run_tool,
+)
 
 
 class FakeClient:
@@ -24,6 +32,7 @@ def settings() -> Settings:
         max_tokens=256,
         temperature=0.2,
         history_limit=24,
+        knowledge_base_id="",
     )
 
 
@@ -170,6 +179,30 @@ class ToolTests(unittest.TestCase):
         text = found["toolResult"]["content"][0]["text"]
         self.assertIn("birch-lantern-19", text)
         self.assertNotIn("opens at 8:15", text)
+
+    def test_knowledge_base_search_formats_retrieve_results(self):
+        class FakeRetrieve:
+            def retrieve(self, **kwargs):
+                self.kwargs = kwargs
+                return {
+                    "retrievalResults": [
+                        {
+                            "content": {"text": "The password is birch-lantern-19."},
+                            "location": {
+                                "s3Location": {
+                                    "uri": "s3://docs-agent-mohit716/office-guide.md"
+                                }
+                            },
+                        }
+                    ]
+                }
+
+        client = FakeRetrieve()
+        text = KnowledgeBaseSearch(client, "HR5D1WUZG4").search("guest wifi")
+        self.assertEqual(client.kwargs["knowledgeBaseId"], "HR5D1WUZG4")
+        self.assertIn("managedSearchConfiguration", client.kwargs["retrievalConfiguration"])
+        self.assertIn("birch-lantern-19", text)
+        self.assertEqual(passages_from_retrieve({"retrievalResults": []}), "No matching passages.")
 
     def test_trim_drops_leading_tool_result(self):
         messages = [
