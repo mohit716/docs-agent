@@ -1,3 +1,4 @@
+import copy
 import re
 from collections.abc import Callable
 
@@ -33,20 +34,37 @@ def run_turn(
     specs = [tool.spec() for tool in tools]
     system_text = SYSTEM_PROMPT
     empty_replies = 0
+    grounding_source = ""
 
     for _ in range(MAX_TOOL_ROUNDS):
-        response = client.converse(
-            modelId=settings.model_id,
-            messages=messages,
-            system=[{"text": system_text}],
-            inferenceConfig={
+        request: dict = {
+            "modelId": settings.model_id,
+            "messages": with_grounding(
+                messages,
+                latest_user_question(messages),
+                grounding_source if settings.guardrail_id else "",
+            ),
+            "system": [{"text": system_text}],
+            "inferenceConfig": {
                 "maxTokens": settings.max_tokens,
                 "temperature": settings.temperature,
             },
-            toolConfig={"tools": specs},
-        )
+            "toolConfig": {"tools": specs},
+        }
+        if settings.guardrail_id:
+            request["guardrailConfig"] = {
+                "guardrailIdentifier": settings.guardrail_id,
+                "guardrailVersion": settings.guardrail_version,
+            }
+        response = client.converse(**request)
         message = response["output"]["message"]
         messages.append(message)
+        if response.get("stopReason") == "guardrail_intervened":
+            reply = visible_reply(text_of(message)) or (
+                "Sorry, the model cannot answer this question."
+            )
+            message["content"] = [{"text": reply}]
+            return reply
         if response.get("stopReason") != "tool_use":
             reply = visible_reply(text_of(message))
             if reply:
@@ -63,18 +81,78 @@ def run_turn(
             continue
 
         results = []
+        source_parts = []
         for block in message.get("content", []):
             tool_use = block.get("toolUse")
             if not tool_use:
                 continue
             if on_tool:
                 on_tool(tool_use.get("name", ""))
-            results.append(run_tool(tools, tool_use))
+            result = run_tool(tools, tool_use)
+            results.append(result)
+            if tool_use.get("name") == "search_docs":
+                source_parts.extend(_result_text(result))
+        if source_parts:
+            grounding_source = "\n\n".join(source_parts)
         if not results:
             return text_of(message) or "The model asked for a tool but did not name one."
         messages.append({"role": "user", "content": results})
 
     return "Stopped after too many tool calls. Rephrase the request or use /reset."
+
+
+def with_grounding(messages: list[dict], query: str, source: str) -> list[dict]:
+    """Mark the retrieved passages as the guardrail grounding source for this call."""
+    if not source or not query:
+        return messages
+    cloned = copy.deepcopy(messages)
+    for message in reversed(cloned):
+        if message.get("role") != "user" or _is_tool_result(message):
+            continue
+        message.setdefault("content", []).extend(
+            [
+                {
+                    "guardContent": {
+                        "text": {
+                            "text": source,
+                            "qualifiers": ["grounding_source"],
+                        }
+                    }
+                },
+                {
+                    "guardContent": {
+                        "text": {
+                            "text": query,
+                            "qualifiers": ["query", "guard_content"],
+                        }
+                    }
+                },
+            ]
+        )
+        break
+    return cloned
+
+
+def latest_user_question(messages: list[dict]) -> str:
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        for block in message.get("content") or []:
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+    return ""
+
+
+def _result_text(result: dict) -> list[str]:
+    tool_result = result.get("toolResult") or {}
+    if tool_result.get("status") == "error":
+        return []
+    return [
+        block["text"]
+        for block in tool_result.get("content") or []
+        if isinstance(block.get("text"), str) and block["text"]
+    ]
 
 
 def text_of(message: dict) -> str:

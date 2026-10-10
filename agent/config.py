@@ -10,6 +10,8 @@ class Settings:
     temperature: float
     history_limit: int
     knowledge_base_id: str
+    guardrail_id: str
+    guardrail_version: str
 
 
 def load_settings() -> Settings:
@@ -20,4 +22,6 @@ def load_settings() -> Settings:
         temperature=float(os.getenv("BEDROCK_TEMPERATURE", "0.2")),
         history_limit=int(os.getenv("BEDROCK_HISTORY_MESSAGES", "24")),
         knowledge_base_id=os.getenv("BEDROCK_KNOWLEDGE_BASE_ID", "").strip(),
+        guardrail_id=os.getenv("BEDROCK_GUARDRAIL_ID", "").strip(),
+        guardrail_version=os.getenv("BEDROCK_GUARDRAIL_VERSION", "1").strip() or "1",
     )

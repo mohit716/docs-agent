@@ -1,6 +1,6 @@
 # docs-agent
 
-A local chat agent for one person. It calls the Amazon Bedrock Converse API. `search_docs` reads a Managed Knowledge Base when `BEDROCK_KNOWLEDGE_BASE_ID` is set, and otherwise searches `docs/office-guide.md`.
+A local chat agent for one person. It calls the Amazon Bedrock Converse API. `search_docs` reads a Managed Knowledge Base when `BEDROCK_KNOWLEDGE_BASE_ID` is set, and otherwise searches `docs/office-guide.md`. A guardrail is applied when `BEDROCK_GUARDRAIL_ID` is set.
 
 The default model is Nova Lite in US East (N. Virginia). You pay for tokens only. At personal use that stays under about $1 a month.
 

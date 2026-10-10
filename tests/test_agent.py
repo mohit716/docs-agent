@@ -33,6 +33,8 @@ def settings() -> Settings:
         temperature=0.2,
         history_limit=24,
         knowledge_base_id="",
+        guardrail_id="",
+        guardrail_version="1",
     )
 
 
@@ -118,6 +120,63 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(reply, "Hi. What do you need?")
         self.assertEqual(messages[-1]["content"], [{"text": "Hi. What do you need?"}])
         self.assertIn("plain sentences", client.calls[1]["system"][0]["text"])
+
+    def test_guardrail_and_grounding_are_sent_after_search(self):
+        client = FakeClient(
+            [
+                {
+                    "stopReason": "tool_use",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "toolUse": {
+                                        "toolUseId": "d1",
+                                        "name": "search_docs",
+                                        "input": {"query": "wifi"},
+                                    }
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "stopReason": "end_turn",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"text": "birch-lantern-19"}],
+                        }
+                    },
+                },
+            ]
+        )
+        guarded = settings()
+        guarded = type(guarded)(
+            **{**guarded.__dict__, "guardrail_id": "d4kbabpmm9jf"}
+        )
+        messages = [{"role": "user", "content": [{"text": "wifi password?"}]}]
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text(
+                "## Guest Wi-Fi\n\nThe password is birch-lantern-19.\n",
+                encoding="utf-8",
+            )
+            reply = run_turn(client, guarded, messages, _tools(Path(directory)))
+
+        self.assertEqual(reply, "birch-lantern-19")
+        config = client.calls[1]["guardrailConfig"]
+        self.assertEqual(config["guardrailIdentifier"], "d4kbabpmm9jf")
+        self.assertEqual(config["guardrailVersion"], "1")
+        qualifiers = [
+            block["guardContent"]["text"]["qualifiers"]
+            for block in client.calls[1]["messages"][0]["content"]
+            if "guardContent" in block
+        ]
+        self.assertIn(["grounding_source"], qualifiers)
+        self.assertIn(["query", "guard_content"], qualifiers)
 
     def test_visible_reply_keeps_text_after_thinking(self):
         raw = "<thinking>draft</thinking>\n\nYes. I can help you write code."
