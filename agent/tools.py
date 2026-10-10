@@ -216,15 +216,17 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
         Tool(
             name="search_docs",
             description=(
-                "Search the office documents in the knowledge base and return matching passages. "
-                "Use this before answering questions about office hours, wifi, equipment, or time off."
+                "Search the knowledge base and return matching passages. "
+                "Use this before answering questions about the office guide "
+                "(hours, wifi, equipment, time off) or the operator notes "
+                "(bucket, knowledge base, guardrail, how to refresh documents)."
             ),
             schema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Words to look up in the documents, for example guest wifi password.",
+                        "description": "Words to look up in the documents, for example guest wifi password or knowledge base id.",
                     }
                 },
                 "required": ["query"],
