@@ -20,6 +20,7 @@ _THINKING = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
 _OPEN_THINKING = re.compile(r"<thinking>.*", re.DOTALL | re.IGNORECASE)
 
 MAX_TOOL_ROUNDS = 6
+_BLOCKED_REPLY = "Sorry, the model cannot answer this question."
 
 
 def run_turn(
@@ -35,6 +36,7 @@ def run_turn(
     system_text = SYSTEM_PROMPT
     empty_replies = 0
     grounding_source = ""
+    source_files: list[str] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
         request: dict = {
@@ -60,14 +62,14 @@ def run_turn(
         message = response["output"]["message"]
         messages.append(message)
         if response.get("stopReason") == "guardrail_intervened":
-            reply = visible_reply(text_of(message)) or (
-                "Sorry, the model cannot answer this question."
-            )
+            reply = visible_reply(text_of(message)) or _BLOCKED_REPLY
+            reply = attach_source(reply, source_files)
             message["content"] = [{"text": reply}]
             return reply
         if response.get("stopReason") != "tool_use":
             reply = visible_reply(text_of(message))
             if reply:
+                reply = attach_source(reply, source_files)
                 message["content"] = [{"text": reply}]
                 return reply
             messages.pop()
@@ -91,7 +93,12 @@ def run_turn(
             result = run_tool(tools, tool_use)
             results.append(result)
             if tool_use.get("name") == "search_docs":
-                source_parts.extend(_result_text(result))
+                texts = _result_text(result)
+                source_parts.extend(texts)
+                for text in texts:
+                    for name in source_names(text):
+                        if name not in source_files:
+                            source_files.append(name)
         if source_parts:
             grounding_source = "\n\n".join(source_parts)
         if not results:
@@ -142,6 +149,37 @@ def latest_user_question(messages: list[dict]) -> str:
             if isinstance(text, str) and text.strip():
                 return text.strip()
     return ""
+
+
+def source_names(passages: str) -> list[str]:
+    """File names from the passage labels written by search_docs."""
+    names = []
+    for match in re.finditer(r"^\[([^\]\n]+)\]", passages, re.MULTILINE):
+        label = match.group(1).strip()
+        name = label.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        if not name or name == "passage" or name in names:
+            continue
+        if "://" not in label and not name.lower().endswith((".md", ".txt")):
+            continue
+        names.append(name)
+    return names
+
+
+def with_source(reply: str, names: list[str]) -> str:
+    """Add the document file name when the answer came from search_docs."""
+    if not names:
+        return reply
+    line = "Source: " + ", ".join(names)
+    if line in reply:
+        return reply
+    return f"{reply.rstrip()}\n\n{line}"
+
+
+def attach_source(reply: str, names: list[str]) -> str:
+    """Keep a blocked reply unchanged and label every other document answer."""
+    if reply == _BLOCKED_REPLY:
+        return reply
+    return with_source(reply, names)
 
 
 def _result_text(result: dict) -> list[str]:

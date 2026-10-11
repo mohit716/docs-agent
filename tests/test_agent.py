@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from agent.config import Settings
-from agent.loop import run_turn, trim_history, visible_reply
+from agent.loop import run_turn, source_names, trim_history, visible_reply, with_source
 from agent.tools import (
     DocIndex,
     KnowledgeBaseSearch,
@@ -166,7 +166,7 @@ class LoopTests(unittest.TestCase):
             )
             reply = run_turn(client, guarded, messages, _tools(Path(directory)))
 
-        self.assertEqual(reply, "birch-lantern-19")
+        self.assertEqual(reply, "birch-lantern-19\n\nSource: guide.md")
         config = client.calls[1]["guardrailConfig"]
         self.assertEqual(config["guardrailIdentifier"], "d4kbabpmm9jf")
         self.assertEqual(config["guardrailVersion"], "1")
@@ -177,6 +177,117 @@ class LoopTests(unittest.TestCase):
         ]
         self.assertIn(["grounding_source"], qualifiers)
         self.assertIn(["query", "guard_content"], qualifiers)
+
+    def test_masked_document_answer_still_names_the_file(self):
+        client = FakeClient(
+            [
+                {
+                    "stopReason": "tool_use",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "toolUse": {
+                                        "toolUseId": "d1",
+                                        "name": "search_docs",
+                                        "input": {"query": "bucket"},
+                                    }
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "stopReason": "guardrail_intervened",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"text": "The bucket is in {ADDRESS}."}],
+                        }
+                    },
+                },
+            ]
+        )
+        messages = [{"role": "user", "content": [{"text": "which bucket?"}]}]
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "docs-agent-notes.md").write_text(
+                "## Bucket\n\nThe bucket is docs-agent-mohit716.\n",
+                encoding="utf-8",
+            )
+            reply = run_turn(client, settings(), messages, _tools(Path(directory)))
+
+        self.assertEqual(
+            reply,
+            "The bucket is in {ADDRESS}.\n\nSource: docs-agent-notes.md",
+        )
+
+    def test_blocked_reply_has_no_source_line(self):
+        client = FakeClient(
+            [
+                {
+                    "stopReason": "tool_use",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "toolUse": {
+                                        "toolUseId": "d1",
+                                        "name": "search_docs",
+                                        "input": {"query": "wifi"},
+                                    }
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "stopReason": "guardrail_intervened",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {"text": "Sorry, the model cannot answer this question."}
+                            ],
+                        }
+                    },
+                },
+            ]
+        )
+        messages = [{"role": "user", "content": [{"text": "capital of France?"}]}]
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text(
+                "## Guest Wi-Fi\n\nThe password is birch-lantern-19.\n",
+                encoding="utf-8",
+            )
+            reply = run_turn(client, settings(), messages, _tools(Path(directory)))
+
+        self.assertEqual(reply, "Sorry, the model cannot answer this question.")
+
+    def test_source_line_uses_the_file_name(self):
+        self.assertEqual(
+            source_names(
+                "[https://docs-agent-mohit716.s3.amazonaws.com/docs-agent-notes.md]\n"
+                "The bucket is docs-agent-mohit716.\n\n"
+                "[s3://docs-agent-mohit716/office-guide.md]\n"
+                "The password is birch-lantern-19."
+            ),
+            ["docs-agent-notes.md", "office-guide.md"],
+        )
+        self.assertEqual(source_names("No matching passages."), [])
+        self.assertEqual(
+            with_source("The bucket is docs-agent-mohit716.", ["docs-agent-notes.md"]),
+            "The bucket is docs-agent-mohit716.\n\nSource: docs-agent-notes.md",
+        )
+        self.assertEqual(
+            with_source("Answer\n\nSource: guide.md", ["guide.md"]),
+            "Answer\n\nSource: guide.md",
+        )
 
     def test_visible_reply_keeps_text_after_thinking(self):
         raw = "<thinking>draft</thinking>\n\nYes. I can help you write code."
