@@ -218,8 +218,9 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
             description=(
                 "Search the knowledge base and return matching passages. "
                 "Use this before answering questions about the office guide "
-                "(hours, wifi, equipment, time off) or the operator notes "
-                "(bucket, knowledge base, guardrail, how to refresh documents)."
+                "(hours, wifi, equipment, time off), the operator notes "
+                "(bucket, knowledge base, guardrail, how to refresh documents), "
+                "or the refund procedure (amount, timing, Dashboard, API, test mode)."
             ),
             schema={
                 "type": "object",
