@@ -175,11 +175,23 @@ def with_source(reply: str, names: list[str]) -> str:
     return f"{reply.rstrip()}\n\n{line}"
 
 
+_NOT_FOUND = re.compile(r"\b(?:do|does)(?: not|n't) contain\b", re.IGNORECASE)
+
+
 def attach_source(reply: str, names: list[str]) -> str:
-    """Keep a blocked reply unchanged and label every other document answer."""
-    if reply == _BLOCKED_REPLY:
-        return reply
+    """Label an answer taken from a passage. Leave off the file when it did not answer."""
+    if reply == _BLOCKED_REPLY or _NOT_FOUND.search(reply):
+        return _drop_source_lines(reply)
     return with_source(reply, names)
+
+
+def _drop_source_lines(reply: str) -> str:
+    kept = [
+        line
+        for line in reply.splitlines()
+        if not line.strip().lower().startswith("source:")
+    ]
+    return "\n".join(kept).strip()
 
 
 def _result_text(result: dict) -> list[str]:

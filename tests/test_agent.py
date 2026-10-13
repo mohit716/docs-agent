@@ -3,7 +3,14 @@ import unittest
 from pathlib import Path
 
 from agent.config import Settings
-from agent.loop import run_turn, source_names, trim_history, visible_reply, with_source
+from agent.loop import (
+    attach_source,
+    run_turn,
+    source_names,
+    trim_history,
+    visible_reply,
+    with_source,
+)
 from agent.tools import (
     DocIndex,
     KnowledgeBaseSearch,
@@ -268,6 +275,61 @@ class LoopTests(unittest.TestCase):
             reply = run_turn(client, settings(), messages, _tools(Path(directory)))
 
         self.assertEqual(reply, "Sorry, the model cannot answer this question.")
+
+    def test_unanswered_passage_has_no_source_line(self):
+        client = FakeClient(
+            [
+                {
+                    "stopReason": "tool_use",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "toolUse": {
+                                        "toolUseId": "d1",
+                                        "name": "search_docs",
+                                        "input": {"query": "hours"},
+                                    }
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "stopReason": "end_turn",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "text": (
+                                        "The documents do not contain information about refunds.\n\n"
+                                        "Source: guide.md"
+                                    )
+                                }
+                            ],
+                        }
+                    },
+                },
+            ]
+        )
+        messages = [{"role": "user", "content": [{"text": "How long does a refund take?"}]}]
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text(
+                "## Hours\n\nThe office opens at 8:15.\n",
+                encoding="utf-8",
+            )
+            reply = run_turn(client, settings(), messages, _tools(Path(directory)))
+
+        self.assertEqual(reply, "The documents do not contain information about refunds.")
+        self.assertNotIn("Source:", reply)
+        self.assertEqual(
+            attach_source("The password is birch-lantern-19.", ["guide.md"]),
+            "The password is birch-lantern-19.\n\nSource: guide.md",
+        )
 
     def test_source_line_uses_the_file_name(self):
         self.assertEqual(
