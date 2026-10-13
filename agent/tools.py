@@ -220,7 +220,8 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
                 "Use this before answering questions about the office guide "
                 "(hours, wifi, equipment, time off), the operator notes "
                 "(bucket, knowledge base, guardrail, how to refresh documents), "
-                "or the refund procedure (amount, timing, Dashboard, API, test mode)."
+                "the refund procedure (amount, timing, Dashboard, API, test mode), "
+                "or a card dispute (accept or challenge, evidence, deadline, card network)."
             ),
             schema={
                 "type": "object",

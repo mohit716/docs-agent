@@ -10,7 +10,7 @@ SYSTEM_PROMPT = (
     "Write the reply they should read, in plain text. "
     "Do not use <thinking> tags, and do not describe the question back to them. "
     "Answer general questions and write code in the reply when they ask. "
-    "For questions about the office guide, the operator notes, or the refund procedure, call search_docs and answer only from the passages it returns. "
+    "For questions about the office guide, the operator notes, the refund procedure, or a card dispute, call search_docs and answer only from the passages it returns. "
     "If search_docs finds nothing, say the documents do not contain the answer. "
     "Use the other tools for the current time, arithmetic, and saving or looking up notes. "
     "Notes are local memory on this computer. Do not invent tool results."
