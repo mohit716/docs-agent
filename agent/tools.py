@@ -221,7 +221,8 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
                 "(hours, wifi, equipment, time off), the operator notes "
                 "(bucket, knowledge base, guardrail, how to refresh documents), "
                 "the refund procedure (amount, timing, Dashboard, API, test mode), "
-                "or a card dispute (accept or challenge, evidence, deadline, card network)."
+                "a card dispute (accept or challenge, evidence, deadline, card network), "
+                "or a payout (bank account, first payout, late or missing)."
             ),
             schema={
                 "type": "object",

@@ -16,7 +16,7 @@ The guardrail is named docs-agent-guardrail. Its ID is d4kbabpmm9jf and the publ
 
 ## What it answers
 
-The agent answers questions that are covered by the retrieved documents, including these operator notes, the Northwind office guide, the Stripe refund procedure in stripe-refunds.md, and the dispute procedure in stripe-disputes.md. Questions outside those documents are refused.
+The agent answers questions that are covered by the retrieved documents, including these operator notes, the Northwind office guide, the Stripe refund procedure in stripe-refunds.md, the dispute procedure in stripe-disputes.md, and the payout procedure in stripe-payouts.md. Questions outside those documents are refused.
 
 ## How to refresh
 
