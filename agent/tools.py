@@ -222,7 +222,8 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
                 "(bucket, knowledge base, guardrail, how to refresh documents), "
                 "the refund procedure (amount, timing, Dashboard, API, test mode), "
                 "a card dispute (accept or challenge, evidence, deadline, card network), "
-                "or a payout (bank account, first payout, late or missing)."
+                "a payout (bank account, first payout, late or missing), "
+                "or a payment method (Payments settings, extra steps, integration)."
             ),
             schema={
                 "type": "object",
