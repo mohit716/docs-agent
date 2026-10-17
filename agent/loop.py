@@ -10,7 +10,7 @@ SYSTEM_PROMPT = (
     "Write the reply they should read, in plain text. "
     "Do not use <thinking> tags, and do not describe the question back to them. "
     "Answer general questions and write code in the reply when they ask. "
-    "For questions about the office guide, the operator notes, the refund procedure, a card dispute, a payout, or a payment method, call search_docs and answer only from the passages it returns. "
+    "For questions about the office guide, the operator notes, the refund procedure, a card dispute, a payout, a payment method, or an unrecognized charge, call search_docs and answer only from the passages it returns. "
     "If search_docs finds nothing, say the documents do not contain the answer. "
     "Use the other tools for the current time, arithmetic, and saving or looking up notes. "
     "Notes are local memory on this computer. Do not invent tool results."
@@ -36,7 +36,7 @@ def run_turn(
     system_text = SYSTEM_PROMPT
     empty_replies = 0
     grounding_source = ""
-    source_files: list[str] = []
+    source_passages: list[tuple[str, str]] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
         request: dict = {
@@ -63,13 +63,13 @@ def run_turn(
         messages.append(message)
         if response.get("stopReason") == "guardrail_intervened":
             reply = visible_reply(text_of(message)) or _BLOCKED_REPLY
-            reply = attach_source(reply, source_files)
+            reply = attach_source(reply, files_used(reply, source_passages))
             message["content"] = [{"text": reply}]
             return reply
         if response.get("stopReason") != "tool_use":
             reply = visible_reply(text_of(message))
             if reply:
-                reply = attach_source(reply, source_files)
+                reply = attach_source(reply, files_used(reply, source_passages))
                 message["content"] = [{"text": reply}]
                 return reply
             messages.pop()
@@ -95,10 +95,9 @@ def run_turn(
             if tool_use.get("name") == "search_docs":
                 texts = _result_text(result)
                 source_parts.extend(texts)
-                for text in texts:
-                    for name in source_names(text):
-                        if name not in source_files:
-                            source_files.append(name)
+                source_passages.extend(
+                    passage for text in texts for passage in labeled_passages(text)
+                )
         if source_parts:
             grounding_source = "\n\n".join(source_parts)
         if not results:
@@ -154,15 +153,80 @@ def latest_user_question(messages: list[dict]) -> str:
 def source_names(passages: str) -> list[str]:
     """File names from the passage labels written by search_docs."""
     names = []
-    for match in re.finditer(r"^\[([^\]\n]+)\]", passages, re.MULTILINE):
-        label = match.group(1).strip()
-        name = label.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
-        if not name or name == "passage" or name in names:
-            continue
-        if "://" not in label and not name.lower().endswith((".md", ".txt")):
-            continue
-        names.append(name)
+    for name, _body in labeled_passages(passages):
+        if name not in names:
+            names.append(name)
     return names
+
+
+def labeled_passages(passages: str) -> list[tuple[str, str]]:
+    """(file name, passage text) pairs from the search_docs result."""
+    found = []
+    pattern = re.compile(r"^\[([^\]\n]+)\]\n(.*?)(?=\n\n\[|\Z)", re.M | re.S)
+    for match in pattern.finditer(passages.strip()):
+        name = _file_name(match.group(1).strip())
+        body = match.group(2).strip()
+        if name and body:
+            found.append((name, body))
+    return found
+
+
+def _file_name(label: str) -> str:
+    name = label.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+    if not name or name == "passage":
+        return ""
+    if "://" not in label and not name.lower().endswith((".md", ".txt")):
+        return ""
+    return name
+
+
+_STOP_WORDS = {
+    "that",
+    "this",
+    "with",
+    "from",
+    "your",
+    "have",
+    "been",
+    "into",
+    "about",
+    "than",
+    "then",
+    "they",
+    "them",
+    "their",
+}
+
+
+def _terms(text: str) -> set[str]:
+    terms = set()
+    for token in re.findall(r"[a-z0-9]+", text.lower()):
+        if token.isdigit() or (len(token) >= 4 and token not in _STOP_WORDS):
+            terms.add(token)
+    return terms
+
+
+def files_used(reply: str, passages: list[tuple[str, str]]) -> list[str]:
+    """Keep the file whose passage shares the most wording with the reply."""
+    reply_terms = _terms(reply)
+    if not reply_terms:
+        return []
+    bodies: dict[str, list[str]] = {}
+    order: list[str] = []
+    for name, body in passages:
+        if name not in bodies:
+            order.append(name)
+            bodies[name] = []
+        bodies[name].append(body)
+    scores = [
+        (len(reply_terms & _terms(" ".join(bodies[name]))), name) for name in order
+    ]
+    if not scores:
+        return []
+    best = max(score for score, _name in scores)
+    if best == 0:
+        return []
+    return [name for score, name in scores if score == best]
 
 
 def with_source(reply: str, names: list[str]) -> str:

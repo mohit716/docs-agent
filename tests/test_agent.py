@@ -5,6 +5,8 @@ from pathlib import Path
 from agent.config import Settings
 from agent.loop import (
     attach_source,
+    files_used,
+    labeled_passages,
     run_turn,
     source_names,
     trim_history,
@@ -330,6 +332,62 @@ class LoopTests(unittest.TestCase):
             attach_source("The password is birch-lantern-19.", ["guide.md"]),
             "The password is birch-lantern-19.\n\nSource: guide.md",
         )
+
+    def test_source_line_names_only_the_used_file(self):
+        passages = (
+            "[stripe-payouts.md]\nThe first payout waits 7 to 14 days.\n\n"
+            "[stripe-refunds.md]\nA refund takes 5 to 10 days."
+        )
+        reply = "The first payout waits 7 to 14 days."
+        self.assertEqual(
+            files_used(reply, labeled_passages(passages)),
+            ["stripe-payouts.md"],
+        )
+        client = FakeClient(
+            [
+                {
+                    "stopReason": "tool_use",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "toolUse": {
+                                        "toolUseId": "d1",
+                                        "name": "search_docs",
+                                        "input": {"query": "days"},
+                                    }
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "stopReason": "end_turn",
+                    "output": {
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"text": reply}],
+                        }
+                    },
+                },
+            ]
+        )
+        messages = [{"role": "user", "content": [{"text": "How long is the first payout?"}]}]
+        with tempfile.TemporaryDirectory() as directory:
+            docs = Path(directory) / "docs"
+            docs.mkdir()
+            (docs / "stripe-payouts.md").write_text(
+                "The first payout waits 7 to 14 days.\n",
+                encoding="utf-8",
+            )
+            (docs / "stripe-refunds.md").write_text(
+                "A refund takes 5 to 10 days.\n",
+                encoding="utf-8",
+            )
+            answer = run_turn(client, settings(), messages, _tools(Path(directory)))
+
+        self.assertEqual(answer, reply + "\n\nSource: stripe-payouts.md")
 
     def test_source_line_uses_the_file_name(self):
         self.assertEqual(

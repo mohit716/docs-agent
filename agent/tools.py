@@ -223,7 +223,8 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
                 "the refund procedure (amount, timing, Dashboard, API, test mode), "
                 "a card dispute (accept or challenge, evidence, deadline, card network), "
                 "a payout (bank account, first payout, late or missing), "
-                "or a payment method (Payments settings, extra steps, integration)."
+                "a payment method (Payments settings, extra steps, integration), "
+                "or an unrecognized charge (bank statement, statement descriptor, cardholder)."
             ),
             schema={
                 "type": "object",
