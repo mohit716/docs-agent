@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import boto3
+import psycopg
 from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
 
 from agent.config import load_settings
+from agent.db import Database, rds_configured
 from agent.loop import run_turn
 from agent.tools import DocIndex, KnowledgeBaseSearch, NotesStore, build_tools
 
@@ -22,12 +24,38 @@ def main() -> None:
         )
     else:
         docs = DocIndex(ROOT / "docs")
-    tools = build_tools(NotesStore(ROOT / "data" / "notes.json"), docs)
-    messages: list[dict] = []
+    database = None
+    if rds_configured():
+        try:
+            database = Database(ROOT / "data" / "notes.json")
+        except psycopg.Error as exc:
+            print(
+                "Could not reach RDS. Check that this PC's IP is allowed on "
+                f"port 5432. ({exc})"
+            )
+            return
+        notes = database.notes
+        messages = database.chat.load()
+    else:
+        notes = NotesStore(ROOT / "data" / "notes.json")
+        messages = []
+    tools = build_tools(notes, docs)
 
     print(f"Bedrock agent ({settings.model_id}, {settings.region}).")
+    if database:
+        print("Notes and chat are stored in RDS.")
+        if messages:
+            print(f"Restored {len(messages)} chat messages.")
     print("Commands: /reset clears the chat, /exit quits.")
 
+    try:
+        _chat(client, settings, tools, messages, database)
+    finally:
+        if database:
+            database.close()
+
+
+def _chat(client, settings, tools, messages: list[dict], database: Database | None) -> None:
     while True:
         try:
             user_text = input("\nYou: ").strip()
@@ -41,6 +69,8 @@ def main() -> None:
             return
         if user_text.lower() == "/reset":
             messages.clear()
+            if database:
+                database.chat.clear()
             print("Chat cleared.")
             continue
 
@@ -67,6 +97,11 @@ def main() -> None:
             continue
 
         print(f"\nAgent: {reply or '(no reply)'}")
+        if database:
+            try:
+                database.chat.save(messages)
+            except psycopg.Error as exc:
+                print(f"Could not save this chat turn to RDS. ({exc})")
 
 
 def friendly_error(exc: ClientError) -> str:

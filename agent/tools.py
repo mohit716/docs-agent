@@ -269,7 +269,7 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
         ),
         Tool(
             name="remember",
-            description="Save a short note on this machine for later. Use this when the user asks you to remember something.",
+            description="Save a short note for later. Use this when the user asks you to remember something.",
             schema={
                 "type": "object",
                 "properties": {
@@ -284,7 +284,7 @@ def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list
         ),
         Tool(
             name="recall",
-            description="Look up notes saved earlier on this machine.",
+            description="Look up notes saved earlier.",
             schema={
                 "type": "object",
                 "properties": {

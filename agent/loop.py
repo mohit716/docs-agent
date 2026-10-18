@@ -13,7 +13,7 @@ SYSTEM_PROMPT = (
     "For questions about the office guide, the operator notes, the refund procedure, a card dispute, a payout, a payment method, or an unrecognized charge, call search_docs and answer only from the passages it returns. "
     "If search_docs finds nothing, say the documents do not contain the answer. "
     "Use the other tools for the current time, arithmetic, and saving or looking up notes. "
-    "Notes are local memory on this computer. Do not invent tool results."
+    "Notes are saved in the database and survive a restart. Do not invent tool results."
 )
 
 _THINKING = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)

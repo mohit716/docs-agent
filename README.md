@@ -20,6 +20,8 @@ python main.py
 
 `/reset` clears the conversation. `/exit` quits.
 
+When `RDS_HOST` is set, notes and the chat are stored in that Postgres database and loaded again on the next start. `/reset` deletes the saved chat. Without `RDS_HOST`, notes stay in `data/notes.json` and the chat lasts only until the program exits.
+
 ## Tools
 
 The model can call these on your machine:
@@ -27,7 +29,7 @@ The model can call these on your machine:
 - `search_docs`, over the files in `docs/`
 - `get_current_time`
 - `calculate`
-- `remember` and `recall`, stored in `data/notes.json`
+- `remember` and `recall`, stored in RDS when `RDS_HOST` is set, otherwise in `data/notes.json`
 
 ## Change the model
 
