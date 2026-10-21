@@ -1,6 +1,6 @@
 # docs-agent
 
-A local chat agent for one person. It calls the Amazon Bedrock Converse API. `search_docs` reads a Managed Knowledge Base when `BEDROCK_KNOWLEDGE_BASE_ID` is set, and otherwise searches `docs/office-guide.md`. A guardrail is applied when `BEDROCK_GUARDRAIL_ID` is set.
+A local chat agent for one person. It calls the Amazon Bedrock Converse API. `search_docs` can use a local OpenSearch container, a Managed Knowledge Base, or the files in `docs/`. A guardrail is applied when `BEDROCK_GUARDRAIL_ID` is set.
 
 The default model is Nova Lite in US East (N. Virginia). You pay for tokens only. At personal use that stays under about $1 a month.
 
@@ -19,6 +19,33 @@ python main.py
 ```
 
 `/reset` clears the conversation. `/exit` quits.
+
+## Document search with OpenSearch
+
+OpenSearch is optional. The default `SEARCH_BACKEND=auto` uses the Bedrock
+Knowledge Base when `BEDROCK_KNOWLEDGE_BASE_ID` is set, and otherwise uses the
+local file index. To run OpenSearch locally:
+
+```powershell
+docker compose up -d
+$env:SEARCH_BACKEND = "opensearch"
+python index_documents.py
+python main.py
+```
+
+The indexer reads Markdown and text files from `docs/` and stores each section
+in the `documents` index. Configure a different instance or index with:
+
+```text
+SEARCH_BACKEND=opensearch
+OPENSEARCH_URL=http://localhost:9200
+OPENSEARCH_INDEX=documents
+```
+
+The Docker compose file disables security for local development only. Use
+Amazon OpenSearch Service or a secured OpenSearch deployment for Lambda and
+production. A Lambda function cannot connect to OpenSearch running only on
+your laptop; set `OPENSEARCH_URL` to a network-accessible OpenSearch endpoint.
 
 When `RDS_HOST` is set, notes and the chat are stored in that Postgres database and loaded again on the next start. `/reset` deletes the saved chat. Without `RDS_HOST`, notes stay in `data/notes.json` and the chat lasts only until the program exits.
 

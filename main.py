@@ -8,7 +8,13 @@ from dotenv import load_dotenv
 from agent.config import load_settings
 from agent.db import Database, rds_configured
 from agent.loop import run_turn
-from agent.tools import DocIndex, KnowledgeBaseSearch, NotesStore, build_tools
+from agent.tools import (
+    DocIndex,
+    KnowledgeBaseSearch,
+    NotesStore,
+    OpenSearchSearch,
+    build_tools,
+)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -17,7 +23,15 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     settings = load_settings()
     client = boto3.client("bedrock-runtime", region_name=settings.region)
-    if settings.knowledge_base_id:
+    if settings.search_backend == "opensearch":
+        docs = OpenSearchSearch(
+            settings.opensearch_url,
+            settings.opensearch_index,
+            settings.opensearch_username,
+            settings.opensearch_password,
+            settings.opensearch_verify_certs,
+        )
+    elif settings.knowledge_base_id:
         docs = KnowledgeBaseSearch(
             boto3.client("bedrock-agent-runtime", region_name=settings.region),
             settings.knowledge_base_id,

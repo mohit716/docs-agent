@@ -154,6 +154,71 @@ def passages_from_retrieve(response: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
+class OpenSearchSearch:
+    """Full-text search over document chunks stored in OpenSearch."""
+
+    def __init__(
+        self,
+        url: str,
+        index: str,
+        username: str = "",
+        password: str = "",
+        verify_certs: bool = True,
+        client=None,
+    ):
+        if client is None:
+            try:
+                from opensearchpy import OpenSearch
+            except ImportError as exc:
+                raise RuntimeError(
+                    "OpenSearch search requires the opensearch-py package."
+                ) from exc
+            auth = (username, password) if username else None
+            client = OpenSearch(
+                hosts=[url],
+                http_auth=auth,
+                use_ssl=url.startswith("https://"),
+                verify_certs=verify_certs,
+                ssl_assert_hostname=verify_certs,
+                ssl_show_warn=verify_certs,
+            )
+        self.client = client
+        self.index = index
+
+    def search(self, query: str) -> str:
+        cleaned = query.strip()
+        if not cleaned:
+            raise ValueError("search query is empty")
+        response = self.client.search(
+            index=self.index,
+            body={
+                "size": 3,
+                "query": {
+                    "multi_match": {
+                        "query": cleaned,
+                        "fields": ["text^3", "section^2", "file_name"],
+                    }
+                },
+                "highlight": {"fields": {"text": {}}},
+            },
+        )
+        hits = response.get("hits", {}).get("hits", [])
+        if not hits:
+            return "No matching passages."
+        parts = []
+        for hit in hits:
+            source = hit.get("_source") or {}
+            text = source.get("text", "").strip()
+            if not text:
+                continue
+            label = source.get("file_name") or source.get("path") or "passage"
+            section = source.get("section", "").strip()
+            if section:
+                label = f"{label} — {section}"
+            parts.append(f"[{label}]\n{text}")
+        return "\n\n".join(parts) if parts else "No matching passages."
+
+
 class DocIndex:
     """Keyword search over local text files. A stand-in for a Bedrock Knowledge Base."""
 
@@ -211,7 +276,10 @@ def _query_terms(query: str) -> list[str]:
     ]
 
 
-def build_tools(notes: NotesStore, docs: DocIndex | KnowledgeBaseSearch) -> list[Tool]:
+def build_tools(
+    notes: NotesStore,
+    docs: DocIndex | KnowledgeBaseSearch | OpenSearchSearch,
+) -> list[Tool]:
     return [
         Tool(
             name="search_docs",

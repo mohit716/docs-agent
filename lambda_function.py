@@ -5,7 +5,7 @@ import boto3
 
 from agent.config import load_settings
 from agent.loop import run_turn
-from agent.tools import KnowledgeBaseSearch, NotesStore, build_tools
+from agent.tools import KnowledgeBaseSearch, NotesStore, OpenSearchSearch, build_tools
 
 
 def lambda_handler(event, context):
@@ -39,10 +39,19 @@ def lambda_handler(event, context):
 
     settings = load_settings()
     client = boto3.client("bedrock-runtime", region_name=settings.region)
-    docs = KnowledgeBaseSearch(
-        boto3.client("bedrock-agent-runtime", region_name=settings.region),
-        settings.knowledge_base_id,
-    )
+    if settings.search_backend == "opensearch":
+        docs = OpenSearchSearch(
+            settings.opensearch_url,
+            settings.opensearch_index,
+            settings.opensearch_username,
+            settings.opensearch_password,
+            settings.opensearch_verify_certs,
+        )
+    else:
+        docs = KnowledgeBaseSearch(
+            boto3.client("bedrock-agent-runtime", region_name=settings.region),
+            settings.knowledge_base_id,
+        )
     tools = build_tools(NotesStore(Path("/tmp/notes.json")), docs)
     messages = [{"role": "user", "content": [{"text": question}]}]
     reply = run_turn(client, settings, messages, tools)

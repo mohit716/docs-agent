@@ -17,6 +17,7 @@ from agent.tools import (
     DocIndex,
     KnowledgeBaseSearch,
     NotesStore,
+    OpenSearchSearch,
     build_tools,
     calculate,
     passages_from_retrieve,
@@ -493,6 +494,32 @@ class ToolTests(unittest.TestCase):
         self.assertIn("managedSearchConfiguration", client.kwargs["retrievalConfiguration"])
         self.assertIn("birch-lantern-19", text)
         self.assertEqual(passages_from_retrieve({"retrievalResults": []}), "No matching passages.")
+
+    def test_opensearch_search_formats_hits(self):
+        class FakeOpenSearch:
+            def search(self, **kwargs):
+                self.kwargs = kwargs
+                return {
+                    "hits": {
+                        "hits": [
+                            {
+                                "_source": {
+                                    "file_name": "guide.md",
+                                    "section": "Guest Wi-Fi",
+                                    "text": "The password is birch-lantern-19.",
+                                }
+                            }
+                        ]
+                    }
+                }
+
+        client = FakeOpenSearch()
+        text = OpenSearchSearch("http://localhost:9200", "documents", client=client).search(
+            "guest wifi"
+        )
+        self.assertEqual(client.kwargs["index"], "documents")
+        self.assertIn("birch-lantern-19", text)
+        self.assertIn("Guest Wi-Fi", text)
 
     def test_trim_drops_leading_tool_result(self):
         messages = [
