@@ -25,6 +25,7 @@ from agent.tools import (
     passages_from_retrieve,
     run_tool,
 )
+from agent.textract import TextractTextExtractor, text_from_response
 from agent.secrets import load_configured_secret
 
 
@@ -67,6 +68,47 @@ class SecretsTests(unittest.TestCase):
             }
             load_configured_secret()
             self.assertEqual(os.environ["RDS_HOST"], "local")
+
+
+class TextractTests(unittest.TestCase):
+    def test_extract_bytes_sends_document_and_returns_lines(self):
+        client = FakeTextractClient(
+            {"Blocks": [
+                {"BlockType": "LINE", "Text": "First line"},
+                {"BlockType": "WORD", "Text": "ignored"},
+                {"BlockType": "LINE", "Text": "Second line"},
+            ]}
+        )
+
+        text = TextractTextExtractor(client=client).extract_bytes(b"pdf-data")
+
+        self.assertEqual(text, "First line\nSecond line")
+        self.assertEqual(
+            client.calls,
+            [{"Document": {"Bytes": b"pdf-data"}}],
+        )
+
+    def test_extract_s3_object_validates_location(self):
+        with self.assertRaisesRegex(ValueError, "bucket and key"):
+            TextractTextExtractor(client=FakeTextractClient({})).extract_s3_object(
+                "", "document.pdf"
+            )
+
+    def test_text_from_response_ignores_empty_lines(self):
+        self.assertEqual(
+            text_from_response({"Blocks": [{"BlockType": "LINE", "Text": "  "}]}),
+            "",
+        )
+
+
+class FakeTextractClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def detect_document_text(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
 
 
 def settings() -> Settings:

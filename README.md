@@ -87,3 +87,21 @@ Set `BEDROCK_MODEL_ID` in `.env`. These inference profiles work in `us-east-1`:
 - `us.amazon.nova-pro-v1:0`
 
 The model must support the Bedrock Converse API with tool use.
+
+## Optional document OCR with Textract
+
+`TextractTextExtractor` provides boilerplate for extracting text from a local
+image or PDF, or directly from an S3 object:
+
+```python
+from agent.textract import TextractTextExtractor
+
+extractor = TextractTextExtractor(region_name="us-east-1")
+text = extractor.extract_s3_object("your-document-bucket", "uploads/example.pdf")
+print(text)
+```
+
+The runtime identity needs `textract:DetectDocumentText` and, for S3 input,
+permission to read the object. This helper is intentionally separate from
+`search_docs`; the extracted text can be written to S3 and synchronized to the
+Bedrock Knowledge Base as part of an upload workflow.
