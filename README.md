@@ -49,6 +49,27 @@ your laptop; set `OPENSEARCH_URL` to a network-accessible OpenSearch endpoint.
 
 When `RDS_HOST` is set, notes and the chat are stored in that Postgres database and loaded again on the next start. `/reset` deletes the saved chat. Without `RDS_HOST`, notes stay in `data/notes.json` and the chat lasts only until the program exits.
 
+### Optional Secrets Manager configuration
+
+Set `DOCS_AGENT_SECRET_ID` to the ARN or name of a Secrets Manager secret
+containing a JSON object. The CLI and Lambda load its values at startup, while
+explicit environment variables take precedence. For example:
+
+```json
+{
+  "RDS_HOST": "your-rds-endpoint",
+  "RDS_PORT": "5432",
+  "RDS_DB": "postgres",
+  "RDS_USER": "postgres",
+  "RDS_PASSWORD": "your-password",
+  "AWS_BEARER_TOKEN_BEDROCK": "your-bedrock-token"
+}
+```
+
+The runtime IAM identity needs `secretsmanager:GetSecretValue` for that secret.
+Leave `DOCS_AGENT_SECRET_ID` blank to keep using the existing `.env`
+configuration.
+
 ## Tools
 
 The model can call these on your machine:

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from agent.config import load_settings
 from agent.db import Database, rds_configured
 from agent.loop import run_turn
+from agent.secrets import load_configured_secret
 from agent.tools import (
     DocIndex,
     KnowledgeBaseSearch,
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parent
 
 def main() -> None:
     load_dotenv(ROOT / ".env")
+    load_configured_secret()
     settings = load_settings()
     client = boto3.client("bedrock-runtime", region_name=settings.region)
     if settings.search_backend == "opensearch":

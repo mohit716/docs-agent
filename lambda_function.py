@@ -5,6 +5,7 @@ import boto3
 
 from agent.config import load_settings
 from agent.loop import run_turn
+from agent.secrets import load_configured_secret
 from agent.tools import KnowledgeBaseSearch, NotesStore, OpenSearchSearch, build_tools
 
 
@@ -37,6 +38,7 @@ def lambda_handler(event, context):
     # Optional: If you want each user to have isolated notes in /tmp
     # user_notes_path = Path(f"/tmp/notes_{user_id}.json")
 
+    load_configured_secret()
     settings = load_settings()
     client = boto3.client("bedrock-runtime", region_name=settings.region)
     if settings.search_backend == "opensearch":

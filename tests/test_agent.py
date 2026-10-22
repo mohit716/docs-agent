@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import os
+from unittest.mock import patch
 from pathlib import Path
 
 from agent.config import Settings
@@ -23,6 +25,7 @@ from agent.tools import (
     passages_from_retrieve,
     run_tool,
 )
+from agent.secrets import load_configured_secret
 
 
 class FakeClient:
@@ -33,6 +36,37 @@ class FakeClient:
     def converse(self, **kwargs):
         self.calls.append(kwargs)
         return self.responses.pop(0)
+
+
+class SecretsTests(unittest.TestCase):
+    def test_secret_values_fill_missing_environment_variables(self):
+        with patch.dict(
+            "os.environ",
+            {"DOCS_AGENT_SECRET_ID": "docs-agent/test"},
+            clear=True,
+        ), patch(
+            "agent.secrets.boto3.client"
+        ) as client:
+            client.return_value.get_secret_value.return_value = {
+                "SecretString": '{"RDS_HOST": "db.example", "RDS_PORT": 5432}'
+            }
+            load_configured_secret()
+            self.assertEqual(os.environ["RDS_HOST"], "db.example")
+            self.assertEqual(os.environ["RDS_PORT"], "5432")
+
+    def test_existing_environment_values_are_not_overwritten(self):
+        with patch.dict(
+            "os.environ",
+            {"DOCS_AGENT_SECRET_ID": "docs-agent/test", "RDS_HOST": "local"},
+            clear=True,
+        ), patch(
+            "agent.secrets.boto3.client"
+        ) as client:
+            client.return_value.get_secret_value.return_value = {
+                "SecretString": '{"RDS_HOST": "remote"}'
+            }
+            load_configured_secret()
+            self.assertEqual(os.environ["RDS_HOST"], "local")
 
 
 def settings() -> Settings:
