@@ -105,3 +105,41 @@ The runtime identity needs `textract:DetectDocumentText` and, for S3 input,
 permission to read the object. This helper is intentionally separate from
 `search_docs`; the extracted text can be written to S3 and synchronized to the
 Bedrock Knowledge Base as part of an upload workflow.
+
+## Optional SQS document worker
+
+The repository includes SQS boilerplate for a separate Lambda worker in
+`sqs_worker.py`. It is intended for this flow:
+
+```text
+S3 notification -> SQS -> sqs_worker.py -> Textract -> extracted text in S3
+```
+
+Configure the worker with:
+
+```text
+SQS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/queue-name
+OCR_OUTPUT_PREFIX=extracted/
+```
+
+The worker expects S3 event notifications wrapped in SQS messages. Configure
+the S3 notification to exclude the `extracted/` prefix, or the worker can
+process its own output repeatedly. It also accepts direct `{bucket, key}` jobs
+sent by `DocumentJobQueue`. Enable the Lambda event source mapping with
+partial batch responses so failed messages are retried individually.
+
+The sending helper can enqueue a document job:
+
+```python
+from agent.sqs import DocumentJobQueue
+
+queue = DocumentJobQueue("https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/queue-name")
+queue.send_document_job("docs-agent-mohit716", "uploads/example.pdf")
+```
+
+The worker role needs `textract:DetectDocumentText`, `s3:GetObject`, and
+`s3:PutObject` for the relevant bucket prefixes. Its execution role also needs
+the standard SQS receive/delete permissions supplied by the Lambda event
+source mapping. This worker does not start a Bedrock Knowledge Base sync;
+that should be added after the OCR output format and data-source prefixes are
+confirmed.
