@@ -143,3 +143,12 @@ the standard SQS receive/delete permissions supplied by the Lambda event
 source mapping. This worker does not start a Bedrock Knowledge Base sync;
 that should be added after the OCR output format and data-source prefixes are
 confirmed.
+
+
+Limitations and Future Improvements
+
+* Add automated evaluation for document retrieval and answer quality.
+* Improve error handling and observability for AWS service failures.
+* Add automated tests for agent tools, document search, and persistent memory.
+* Complete the OCR-to-indexing workflow and verify Knowledge Base synchronization.
+* Explore a FastAPI interface for programmatic access to the agent.
