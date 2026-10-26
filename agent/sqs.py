@@ -14,6 +14,7 @@ class SqsSettings:
     region: str
     queue_url: str
     output_prefix: str
+    dynamodb_document_table: str
 
 
 def load_sqs_settings() -> SqsSettings:
@@ -22,6 +23,7 @@ def load_sqs_settings() -> SqsSettings:
         queue_url=os.getenv("SQS_QUEUE_URL", "").strip(),
         output_prefix=os.getenv("OCR_OUTPUT_PREFIX", "extracted/").strip()
         or "extracted/",
+        dynamodb_document_table=os.getenv("DYNAMODB_DOCUMENT_TABLE", "").strip(),
     )
 
 
@@ -53,6 +55,7 @@ def process_sqs_event(
     textract_client=None,
     s3_client=None,
     output_prefix: str = "extracted/",
+    job_store=None,
 ) -> dict[str, list[dict[str, str]]]:
     """Process S3 notifications delivered through an SQS Lambda event.
 
@@ -64,8 +67,13 @@ def process_sqs_event(
 
     for record in event.get("Records") or []:
         message_id = str(record.get("messageId", "")).strip()
+        document_id = None
         try:
             for bucket, key in s3_objects_from_sqs_record(record):
+                if job_store:
+                    document_id, claimed = job_store.claim(bucket, key)
+                    if not claimed:
+                        continue
                 text = extractor.extract_s3_object(bucket, key)
                 output_key = extracted_key(key, output_prefix)
                 s3.put_object(
@@ -74,11 +82,17 @@ def process_sqs_event(
                     Body=text.encode("utf-8"),
                     ContentType="text/plain; charset=utf-8",
                 )
+                if job_store:
+                    job_store.mark_complete(document_id, output_key)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             print(f"Invalid SQS document message {message_id!r}: {exc}")
+            if job_store and document_id:
+                job_store.mark_failed(document_id, exc)
             failures.append({"itemIdentifier": message_id})
         except Exception as exc:
             print(f"Document processing failed for SQS message {message_id!r}: {exc}")
+            if job_store and document_id:
+                job_store.mark_failed(document_id, exc)
             failures.append({"itemIdentifier": message_id})
 
     return {"batchItemFailures": failures}

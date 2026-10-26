@@ -144,7 +144,6 @@ source mapping. This worker does not start a Bedrock Knowledge Base sync;
 that should be added after the OCR output format and data-source prefixes are
 confirmed.
 
-
 Limitations and Future Improvements
 
 * Add automated evaluation for document retrieval and answer quality.
@@ -152,3 +151,21 @@ Limitations and Future Improvements
 * Add automated tests for agent tools, document search, and persistent memory.
 * Complete the OCR-to-indexing workflow and verify Knowledge Base synchronization.
 * Explore a FastAPI interface for programmatic access to the agent.
+
+### Optional DynamoDB job tracking
+
+Set `DYNAMODB_DOCUMENT_TABLE` to enable idempotency and document status
+tracking in the SQS worker. Create a table with a string partition key named
+`document_id`:
+
+```powershell
+aws dynamodb create-table `
+  --table-name docs-agent-document-jobs `
+  --attribute-definitions AttributeName=document_id,AttributeType=S `
+  --key-schema AttributeName=document_id,KeyType=HASH `
+  --billing-mode PAY_PER_REQUEST
+```
+
+The worker records `PROCESSING`, `COMPLETE`, and `FAILED` states. Duplicate
+SQS deliveries for a completed or currently processing document are skipped.
+The worker role needs `dynamodb:UpdateItem` on this table.

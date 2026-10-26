@@ -18,6 +18,7 @@ class Settings:
     opensearch_username: str = ""
     opensearch_password: str = ""
     opensearch_verify_certs: bool = False
+    dynamodb_document_table: str = ""
 
 
 def load_settings() -> Settings:
@@ -37,4 +38,5 @@ def load_settings() -> Settings:
         opensearch_password=os.getenv("OPENSEARCH_PASSWORD", ""),
         opensearch_verify_certs=os.getenv("OPENSEARCH_VERIFY_CERTS", "false").lower()
         in {"1", "true", "yes"},
+        dynamodb_document_table=os.getenv("DYNAMODB_DOCUMENT_TABLE", "").strip(),
     )

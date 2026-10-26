@@ -27,6 +27,48 @@ from agent.tools import (
 )
 from agent.textract import TextractTextExtractor, text_from_response
 from agent.secrets import load_configured_secret
+from agent.dynamodb import DocumentJobStore, document_id_for
+
+
+class FakeDynamoClient:
+    class exceptions:
+        class ConditionalCheckFailedException(Exception):
+            pass
+
+    def __init__(self):
+        self.calls = []
+
+    def update_item(self, **kwargs):
+        self.calls.append(kwargs)
+
+
+class DynamoDBTests(unittest.TestCase):
+    def test_document_id_is_stable_and_changes_with_location(self):
+        first = document_id_for("bucket", "uploads/file.pdf")
+        self.assertEqual(first, document_id_for("bucket", "uploads/file.pdf"))
+        self.assertNotEqual(first, document_id_for("bucket", "uploads/other.pdf"))
+
+    def test_claim_writes_processing_state(self):
+        client = FakeDynamoClient()
+        store = DocumentJobStore("document-jobs", client=client)
+
+        document_id, claimed = store.claim("bucket", "uploads/file.pdf")
+
+        self.assertTrue(claimed)
+        self.assertEqual(document_id, document_id_for("bucket", "uploads/file.pdf"))
+        self.assertEqual(client.calls[0]["TableName"], "document-jobs")
+        values = client.calls[0]["ExpressionAttributeValues"]
+        self.assertEqual(values[":processing"], {"S": "PROCESSING"})
+
+    def test_mark_complete_writes_output_key(self):
+        client = FakeDynamoClient()
+        store = DocumentJobStore("document-jobs", client=client)
+
+        store.mark_complete("doc-id", "extracted/file.txt")
+
+        values = client.calls[0]["ExpressionAttributeValues"]
+        self.assertEqual(values[":status"], {"S": "COMPLETE"})
+        self.assertEqual(values[":output_key"], {"S": "extracted/file.txt"})
 
 
 class FakeClient:
